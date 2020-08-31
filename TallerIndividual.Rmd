@@ -1,0 +1,415 @@
+---
+title: "Taller Individual-HubwayChallenge"
+author: "AndresParedes"
+date: "May 7, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#install.packages("knitr")
+#install.packages("rmarkdown")
+#install.packages("ggplot2")
+#install.packages("dplyr")
+#install.packages("stringr")
+#install.packages("rgdal")
+#install.packages("raster")
+#install.packages("rgeos")
+#install.packages("RColorBrewer")
+#install.packages("ggmap")
+library(knitr)
+library(rmarkdown)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(rgdal)
+library(raster)
+library(rgeos)
+library(RColorBrewer) 
+library(ggmap)
+```
+##Intrdocción 
+
+Este es un trabajo para la clase de Analisis exploratorio de datos sobre el uso de un sistema de prestamo gratuito de bicicletas en la ciudad de Boston llamado Boston Hubway, e intentare resolver las siguiente preguntas a lo largo de este documento:
+
+¿Quién ha utilizado más el servicio de bicicletas?
+¿Mujeres o hombres?
+¿Personas mayores o jóvenes?
+¿Suscritos o solo usuarios que han utilizado el servicio una sola vez?
+
+
+¿Dónde se ha solicitado más el servicio de bicicletas?
+¿Más en Boston que en Cambridge?
+¿Cuáles son las tres estaciones donde han llegado más viajes en estas bicicletas?
+¿Cuáles son las cinco estaciones desde donde han salido la mayor cantidad de viajes en estas bicicletas?
+¿Cuáles son los cinco recorridos que tuvieron la mayor duración (de mayor a menor)?
+¿Cuáles son los cinco recorridos que tuvieron la menor duración (de menor a mayor)?
+
+
+¿Cuándo se ha solicitado más el servicio de bicicletas?
+¿Más durante el fin de semana que durante los días de semana?
+¿Más durante las horas pico?
+¿Más durante la temporada de verano que la de otoño?
+¿Cuáles son las horas de mayor demanda de bicicletas
+
+
+¿Cuáles son los crímenes más reportados?
+¿Cuáles son los tres barrios más seguros y los tres barrios menos seguros de Boston?
+¿Se ha utilizado menos el servicio de bicicletas en los barrios con mayor reporte de incidentes de criminalidad?
+¿Se ha utilizado más el servicio de bicicletas en los barrios con menor reporte de incidentes de criminalidad?
+
+
+
+
+## Carga y limpieza de  datasets
+
+```{r cargamos todos los datasets }
+#("D:/Descargas/datasets/dataset")
+#Data viajes
+#http://hubwaydatachallenge.org/
+dataTrips<-read.csv(file="hubway_tripsCorrecto.csv",sep=",")
+#Data estaciones
+#http://hubwaydatachallenge.org/
+dataStations<-read.csv(file="hubway_stations.csv",sep=",")
+#Data Crimen
+#https://www.kaggle.com/ankkur13/boston-crime-data
+dataCrimes<-read.csv(file="crimeEx.csv",sep=";")
+#data barrios
+#https://data.boston.gov/dataset/boston-neighborhoods
+dataBarrios<-read.csv(file="Boston_Neighborhoods.csv",sep=",")
+#dataTripsSinNA<- dataTrips[!dataTrips,]
+
+#geoJsonBarrios <- readOGR(dsn = "Boston_Neighborhoods.geojSON")
+#?readOGR
+#setwd("D:/Descargas/datasets/dataset")
+geoBarrios <- readOGR(dsn = "Boston_Neighborhoods.geojson")
+geoBarrios2 <- geoBarrios
+
+
+```
+Vemos que al eliminar todas las columnas con NA se pierde demasiada información por lo que iremos eliminando los na en el camino
+
+
+```{r analizamos y limpiamos el dataset de viajes}
+summary(dataTrips)
+head(dataTrips)
+table(is.na(dataTrips))
+colnames(dataTrips)
+
+row.has.na <- apply(dataTrips, 1, function(x){any(is.na(x))})
+sum(row.has.na)
+dataTripsSinNA <- dataTrips[!row.has.na,]
+table(is.na(dataTripsSinNA))
+
+sum(is.na(dataTrips$strt_statn))
+sum(is.na(dataTrips$strt_statn))
+sapply(dataTrips, class)
+
+```
+
+```{r analizamos y limpiamos el dataset de crimenes}
+summary(dataCrimes)
+head(dataCrimes)
+table(is.na(dataCrimes))
+```
+
+
+```{r analizamos y limpiamos el dataset de estaciones}
+summary(dataStations)
+head(dataStations)
+table(is.na(dataStations))
+```
+respondemos 
+#¿Quién ha utilizado más el servicio de bicicletas?
+para esto podemos utilizar la funcion table sobre el dataset trips 
+
+#¿Mujeres o hombres? 
+se han reportado más viajes de hombres `r data.frame(unlist(table(dataTrips$gender)))[3,2] ` que de mujeres `r data.frame(unlist(table(dataTrips$gender)))[2,2] `
+
+#¿Personas mayores o jóvenes?
+vamos a definir jovenes hasta los 30 años y la data es del 2012 por lo que la edad minima de nacimiento de los jovenes es de 1982
+hay mas usuarios mayores 204317 que usuarios jovenes en el sistema 146327
+
+#¿Suscritos o solo usuarios que han utilizado el servicio una sola vez? 
+hay más registrados `r data.frame(unlist(table(dataTrips$subsc_type)))[2,2] ` que casuales `r data.frame(unlist(table(dataTrips$subsc_type)))[1,2] `
+
+
+```{r QuiÃ©n ha utilizado}
+table(dataTrips$gender)
+generoLimpio<- dataTrips$gender[!dataTrips$gender=='']
+table(generoLimpio)
+
+table(dataTrips$birth_date)
+tmp<-data.frame(unlist(table(dataTrips$birth_date)))
+tmp$Var1<-as.numeric(as.character(tmp$Var1))
+tmpjovenes <- tmp[which(tmp$Var1>=1982),]
+sum(tmpjovenes$Freq)
+tmpmayores <- tmp[which(tmp$Var1<1982),]
+sum(tmpmayores$Freq)
+table(dataTrips$subsc_type)
+
+```
+
+
+#¿Dónde se ha solicitado más el servicio de bicicletas?
+
+#¿Más en Boston que en Cambridge? 
+se han solicitado mas bicicletas desde Boston hay 1221956 viajes saliendo de boston Boston hay 296778 saliendo de cambridge
+
+#¿Cuáles son las tres estaciones donde han llegado más viajes en estas bicicletas?
+South Station - 700 Atlantic Ave. con 56280 llegadas, Boston Public Library - 700 Boylston St. con 43387 llegadas y Charles Circle - Charles St. at Cambridge St. con 35361 llegadas
+
+#¿Cuáles son las cinco estaciones desde donde han salido la mayor cantidad de viajes en estas bicicletas?
+South Station - 700 Atlantic Ave.	con 56442	salidas, Boston Public Library - 700 Boylston St. con 42568 salidas, Charles Circle - Charles St. at Cambridge St. con 36201 salidas, Beacon St / Mass Ave con 35438 salidas y 
+MIT at Mass Ave / Amherst St con 33685 salidas
+
+#¿Cuáles son los cinco recorridos que tuvieron la mayor duración (de mayor a menor)?
+"Fan Pier-Christian Science Plaza"
+"Congress / Sleeper-Faneuil Hall - Union St. at North St."
+"Dorchester Ave. at Gillette Park-HMS / HSPH - Ave. Louis Pasteur at Longwood Ave."
+"Rowes Wharf - Atlantic Ave-Post Office Square"
+"TD Garden - Legends Way-South Station - 700 Atlantic Ave."
+
+#¿Cuáles son los cinco recorridos que tuvieron la menor duración (de menor a mayor)?
+
+"Tremont St. at Berkeley St.-Tremont St. at Berkeley St."
+
+"South Station - 700 Atlantic Ave.-South Station - 700 Atlantic Ave."
+
+"South Station - 700 Atlantic Ave.-South Station - 700 Atlantic Ave."
+
+"Washington St. at Waltham St.-Washington St. at Waltham St."
+
+"Seaport Hotel-Seaport Hotel"
+
+
+```{r DÃ³nde se ha solicitado}
+tmpsalida<-dataStations
+colnames(tmpsalida) <- paste("sal", colnames(tmpsalida), sep = "_")
+dataTrips2<-merge(dataTrips,tmpsalida,by.x = 'strt_statn',by.y = 'sal_id')
+table(dataTrips2$sal_municipal)
+tmpllegada<-dataStations
+colnames(tmpllegada) <- paste("lle", colnames(tmpllegada), sep = "_")
+dataTrips3<-merge(dataTrips2,tmpllegada,by.x = 'end_statn',by.y = 'lle_id')
+tmpestaciones<-data.frame(unlist(table(dataTrips3$lle_station)))
+tmpestaciones <- tmpestaciones[order(-tmpestaciones$Freq),]
+tmpestaciones[1,]
+tmpestaciones[2,]
+tmpestaciones[3,]
+tmpestaciones<-data.frame(unlist(table(dataTrips3$sal_station)))
+tmpestaciones <- tmpestaciones[order(-tmpestaciones$Freq),]
+tmpestaciones[1,]
+tmpestaciones[2,]
+tmpestaciones[3,]
+tmpestaciones[4,]
+tmpestaciones[5,]
+#table(dataTrips3$duration)
+dataTrips4<-dataTrips3[order(-dataTrips3$duration),]
+dataTrips4 <- dataTrips4[which(dataTrips4$duration>0),]
+#table(dataTrips4$duration)
+dataTrips4 <-dataTrips4[!is.na(dataTrips4$lle_station),]
+dataTrips4 <-dataTrips4[!is.na(dataTrips4$sal_station),]
+dataTrips4 <-dataTrips4[!(dataTrips4$lle_station==''),]
+dataTrips4 <-dataTrips4[!(dataTrips4$sal_station==''),]
+paste(dataTrips4[1,"lle_station"],dataTrips4[1,"sal_station"],sep='-')
+paste(dataTrips4[2,"lle_station"],dataTrips4[2,"sal_station"],sep='-')
+paste(dataTrips4[3,"lle_station"],dataTrips4[3,"sal_station"],sep='-')
+paste(dataTrips4[4,"lle_station"],dataTrips4[4,"sal_station"],sep='-')
+paste(dataTrips4[5,"lle_station"],dataTrips4[5,"sal_station"],sep='-')
+dataTrips42<-dataTrips4[order(dataTrips4$duration),]
+paste(dataTrips42[1,"lle_station"],dataTrips42[1,"sal_station"],sep='-')
+paste(dataTrips42[2,"lle_station"],dataTrips42[2,"sal_station"],sep='-')
+paste(dataTrips42[3,"lle_station"],dataTrips42[3,"sal_station"],sep='-')
+paste(dataTrips42[4,"lle_station"],dataTrips42[4,"sal_station"],sep='-')
+paste(dataTrips42[5,"lle_station"],dataTrips42[5,"sal_station"],sep='-')
+```
+#¿Cuándo se ha solicitado más el servicio de bicicletas?
+#¿Más durante el fin de semana que durante los días de semana?
+más durante semana en total han habido 1167173 viajes mientras que en fin de semana solo 411800 viajes
+
+#¿Más durante las horas pico?
+primero es definir horas pico para lo cual esta el siguiente link (https://www.astro.umd.edu/~avondale/extra/Travel/yearly.html ) que analiza 3 rutas para las cuales se pueden aproximar 2 franjas de horas pico  7 am a 10 am y 4pm a 7pm.
+
+podemos ver que el maximo numero de viajes esta a las 5 pm con 176238 viajes  y los 3 siguientes también con 4 pm 
+130759 viajes, 6 pm 129880 viajes y 8 am 128047 viajes.
+
+por lo que si hay más viajes durante las horas pico
+
+#¿Más durante la temporada de verano que la de otoño?
+https://blog.metoffice.gov.uk/2012/09/20/when-does-autumn-start/
+hay más viajes en otoño ( septiembre a noviembre) 662542 viajes
+que en verano (junio a agosto) con 641264 viajes
+
+#¿Cuáles son las horas de mayor demanda de bicicletas
+
+el maximo numero de viajes esta a las 5 pm con 176238 viajes, lo sigue 4 pm 130759 viajes, 6 pm 129880 viajes y finalmente 8 am 128047 viajes.
+
+```{r Cuándo se ha solicitado}
+table(is.na(dataTrips3$start_date))
+table(is.na(dataTrips3$end_date))
+as.character(dataTrips[1,"start_date"])
+
+
+datet <- as.POSIXct(as.character(dataTrips[1,"start_date"]), format = "%m/%d/%Y %H:%M:%S", tz = "UTC")
+weekdays(datet, abbreviate = F)
+
+diasSemana <-weekdays(as.POSIXct(as.character(dataTrips3[,"start_date"]), format = "%m/%d/%Y %H:%M:%S", tz = "UTC"), abbreviate = F)
+table(diasSemana)
+length(diasSemana[diasSemana=='Saturday'|  diasSemana=='Sunday'])
+length(diasSemana[!diasSemana=='Saturday'&  !diasSemana=='Sunday'])
+
+format(as.POSIXct(as.character(dataTrips[1,"start_date"]), format = "%m/%d/%Y %H:%M:%S"),"%H")
+horas <-format(as.POSIXct(as.character(dataTrips3[,"start_date"]), format = "%m/%d/%Y %H:%M:%S"),"%H")
+table(horas)
+plot(table(horas))
+
+meses <-format(as.POSIXct(as.character(dataTrips3[,"start_date"]), format = "%m/%d/%Y %H:%M:%S"),"%m")
+table(meses)
+165366+205296+270602
+263700+253156+145686
+#plot(table(horas))
+```
+
+
+#¿Cuales son los crímenes más reportados?
+Mala conducta para un accidente de transito (Motor Vehicle Accident Response) como huir de la escena despues de cometer daño a la propiedad (M/V - LEAVING SCENE - PROPERTY DAMAGE)
+
+#¿Cuáles son los tres barrios más seguros y los tres barrios menos seguros de Boston?
+
+los 3 barrios con menor numero de crimenes reportados son:
+
+Harbor Islands con 4, Leather District con 462 y Bay Village con 831
+
+los 3 barrios con mayor numero de crimenes reportados son:
+
+Dorchester con 76823, Roxbury con 40052 y Downtown con 20296
+
+
+#¿Se ha utilizado menos el servicio de bicicletas en los barrios con mayor reporte de incidentes de criminalidad?
+para estas 2 preguntas uso la media de uso de viajes de 67886.44
+Dorchester con 3846 y Roxbury  con 30050 estan por debajo de la media pero  Downtown con 249404 esta muy por encima de la media
+
+#¿Se ha utilizado más el servicio de bicicletas en los barrios con menor reporte de incidentes de criminalidad?
+no hay registros para Harbor Islands, Leather District niBay Village
+
+```{r Cuales son los crímenes}
+table(is.na(dataCrimes$OFFENSE_DESCRIPTION))
+#table(dataCrimes$OFFENSE_CODE_GROUP)
+
+
+tmpoffensas<-data.frame(unlist(table(dataCrimes$OFFENSE_CODE_GROUP)))
+tmpoffensas <- tmpoffensas[order(-tmpoffensas$Freq),]
+tmpoffensas[1,]
+
+tmpoffensas<-data.frame(unlist(table(dataCrimes$OFFENSE_DESCRIPTION)))
+tmpoffensas <- tmpoffensas[order(-tmpoffensas$Freq),]
+tmpoffensas[1,]
+
+tmpoffensas2<-dataCrimes[dataCrimes$OFFENSE_CODE_GROUP != 'Motor Vehicle Accident Response',]
+tmpoffensas2<-dataCrimes[dataCrimes$OFFENSE_CODE_GROUP != 'Medical Assistance',]
+
+tmpoffensas<-data.frame(unlist(table(tmpoffensas2$OFFENSE_CODE_GROUP)))
+tmpoffensas <- tmpoffensas[order(-tmpoffensas$Freq),]
+tmpoffensas[1,]
+
+tmpoffensas2<-dataCrimes[dataCrimes$OFFENSE_CODE_GROUP == 'Motor Vehicle Accident Response',]
+
+tmpoffensas<-data.frame(unlist(table(tmpoffensas2$OFFENSE_DESCRIPTION)))
+tmpoffensas <- tmpoffensas[order(-tmpoffensas$Freq),]
+tmpoffensas[1,]
+
+
+table(is.na(dataCrimes$LATITUDE))
+dataCrimesLimpio <-dataCrimes[!is.na(dataCrimes$LATITUDE),]
+table(is.na(dataCrimesLimpio$LATITUDE))
+#table(dataCrimesLimpio$LOCATION)
+
+
+
+plot(geoBarrios)
+class(geoBarrios)
+getSpPPolygonsIDSlots(geoBarrios)
+barrios <- as.data.frame(geoBarrios)
+p <- lapply(geoBarrios@polygons , slot , "Polygons")
+lapply(p[[1]], function(x) slot(x, "area"))
+
+pruebapuntos<-data.frame(Latitude=dataCrimes$LATITUDE[1:3], Longitude =dataCrimes$LONGITUDE[1:3],dataCrimes$INCIDENT_NUMBER[1:3])
+coordinates(pruebapuntos) <- ~ Longitude + Latitude
+#?proj4string
+
+desagregados<- disaggregate(geoBarrios)
+proj4string(pruebapuntos) <- proj4string(geoBarrios)
+over(pruebapuntos, geoBarrios)
+#table(over(pruebapuntos, geoBarrios))
+
+#?over
+over(geoBarrios, pruebapuntos)
+#coordinates(dataCrimesLimpio) <- ~ LATITUDE + LONGITUDE
+#proj4string(dataCrimesLimpio) <- proj4string(geoBarrios)
+#over( dataCrimesLimpio,geoBarrios)
+#table(dataCrimesLimpio$LOCATION)
+
+plot(geoBarrios)
+
+dataCrimesLimpio <-dataCrimes[!is.na(dataCrimes$LATITUDE),]
+coordinates(dataCrimesLimpio) <- ~ LONGITUDE + LATITUDE
+geoBarrios@data
+plot(dataCrimesLimpio)
+geoBarrios@data <- mutate(geoBarrios@data, id_grid = as.numeric(rownames(geoBarrios@data)))
+dataCrimesLimpio@data <- mutate(dataCrimesLimpio@data, id_crimes= as.numeric(rownames(dataCrimesLimpio@data)))
+proj4string(dataCrimesLimpio) <- proj4string(geoBarrios) 
+
+crimenesmis <- over(dataCrimesLimpio, geoBarrios)
+crimenesmis <- mutate(crimenesmis, id_crimes = as.numeric(rownames(crimenesmis)))
+crimenesmis <- left_join(dataCrimesLimpio@data, crimenesmis, by = c("id_crimes" = "id_crimes"))
+crimenesmisa <- crimenesmis %>% group_by(id_grid) %>%
+summarise(avgSales = mean(HOUR), nCrimes = n()) %>%
+arrange(id_grid)
+geoBarrios@data <- left_join(geoBarrios@data, crimenesmisa, by = c("id_grid" = "id_grid"))
+HELL <- geoBarrios@data
+class(crimenesmisa)
+
+#HELLordered<-HELL[order(-HELL$nCrimes.x),]
+#HELLordered[1,]
+#HELLordered[2,]
+#HELLordered[3,]
+#HELLordered<-HELL[order(HELL$nCrimes.x),]
+#HELLordered[1,]
+#HELLordered[2,]
+#HELLordered[3,]
+#?n()
+crimenes_merged<-merge(HELL,crimenesmisa,by.x = 'id_grid',by.y ='id_grid')
+crimenes_merged<-crimenes_merged[order(-crimenes_merged$nCrimes.x),]
+crimenes_merged[1,]
+crimenes_merged[2,]
+crimenes_merged[3,]
+crimenes_merged<-crimenes_merged[order(crimenes_merged$nCrimes.x),]
+crimenes_merged[1,]
+crimenes_merged[2,]
+crimenes_merged[3,]
+
+dataTripsLimpio <-dataTrips2[!is.na(dataTrips2$sal_lat),]
+coordinates(dataTripsLimpio) <- ~ sal_lng + sal_lat
+geoBarrios2@data <- mutate(geoBarrios2@data, id_grid = as.numeric(rownames(geoBarrios2@data)))
+dataTripsLimpio@data <- mutate(dataTripsLimpio@data, id_trips= as.numeric(rownames(dataTripsLimpio@data)))
+proj4string(dataTripsLimpio) <- proj4string(geoBarrios2) 
+
+tripsmis <- over(dataTripsLimpio, geoBarrios2)
+tripsmis <- mutate(tripsmis, id_trips = as.numeric(rownames(tripsmis)))
+tripsmis <- left_join(dataTripsLimpio@data, tripsmis, by = c("id_trips" = "id_trips"))
+tripsmisa <- tripsmis %>% group_by(id_grid) %>%
+summarise(avgSales = mean(duration), ntrips = n()) %>%
+arrange(id_grid)
+geoBarrios2@data <- left_join(geoBarrios2@data, tripsmisa, by = c("id_grid" = "id_grid"))
+LLEH <- geoBarrios2@data
+TRIPS_merged<-merge(LLEH,tripsmisa,by.x = 'id_grid',by.y ='id_grid')
+mean(TRIPS_merged$ntrips.x)
+plot(x = TRIPS_merged$Name,y=TRIPS_merged$ntrips.x)
+TRIPS_merged[TRIPS_merged$Name=='Dorchester',]
+TRIPS_merged[TRIPS_merged$Name=='Roxbury',]
+TRIPS_merged[TRIPS_merged$Name=='Downtown',]
+TRIPS_merged[TRIPS_merged$Name=='Harbor Islands',]
+TRIPS_merged[TRIPS_merged$Name=='Leather District',]
+TRIPS_merged[TRIPS_merged$Name=='Bay Village',]
+
+```
